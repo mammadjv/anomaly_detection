@@ -35,6 +35,8 @@ class MetalPlateDataset(Dataset):
 
             self.image_paths.sort()  # optional: keep deterministic order
 
+        
+        ### compute the dataset mean for preprocessing
         if dataset_mean == None:
             ## for train
             pytorch_images = []
@@ -66,6 +68,7 @@ class MetalPlateDataset(Dataset):
         img = cv2.imread(path, cv2.IMREAD_COLOR)  # BGR
         img = cv2.resize(img, self.size)
         img_tensor = TF.to_tensor(img)
+        
+        #### mean subtraction
         img_tensor -= self.dataset_mean
-        # img -= self.channel_mean
         return img_tensor, label, self.dataset_mean   # return numpy array + optional path

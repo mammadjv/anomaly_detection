@@ -1,17 +1,12 @@
-import random
-import time
-
 from torch.utils.data import DataLoader
 import torch
 import numpy as np
 from sklearn.metrics import precision_score, recall_score
+import matplotlib.pyplot as plt
 
 from metalDataSet import MetalPlateDataset
 from unet import SkipGANomaly
 
-
-
-import matplotlib.pyplot as plt
 
 # Assuming you have batched_images with shape [B, C, H, W]
 def show_sample(batched_images, reconstructed, sample_idx=0, e=1):
@@ -20,10 +15,6 @@ def show_sample(batched_images, reconstructed, sample_idx=0, e=1):
 
     reconstructed = reconstructed[sample_idx]
     reconstructed = reconstructed.detach().cpu().numpy()
-
-    print(reconstructed.min(), reconstructed.max())
-    print(sample.min(), sample.max())
-
     
     # Convert from CHW to HWC for matplotlib
     if sample.shape[0] in (1, 3):  # if channels are first
@@ -79,19 +70,19 @@ def collate_and_augment_(samples):
 
 
 #### main function!!! #######
-
 if __name__ == "__main__":
-    model_paths = ['skipganomaly_phase1_a.pth', 'skipganomaly_phase1_b.pth']
+    model_paths = ['skipganomaly_phase1_a.pth']
     for model_path in model_paths:
         model = SkipGANomaly(in_nc=3, out_nc=3, feat_dim=100,
                         lambda_adv=0.1, lambda_con=4.0, lambda_lat=0.1, use_bn=True, norm='bn')
 
+        ### load the model from checkpoint
         checkpoint = torch.load(model_path, map_location="cuda")
         model.G.load_state_dict(checkpoint["G_state_dict"])
         model.D.load_state_dict(checkpoint["D_state_dict"])
         model = model.to('cuda')
-        thresholds = checkpoint['thresholds']
-        mean = checkpoint['means'].cpu()
+        thresholds = checkpoint['thresholds'] ## computed thresholds on the train data
+        mean = checkpoint['means'].cpu()  ## train data mean to be subtracted fro testdata
         test_ds = MetalPlateDataset("./metal_plate/test", dataset_mean=mean)
 
         test_dataloader = DataLoader(test_ds, batch_size=1, collate_fn=collate_and_augment_)
@@ -104,7 +95,10 @@ if __name__ == "__main__":
                 for i, (batch_images, ids, mean) in enumerate(test_dataloader):
                     batch_images = batch_images.to('cuda').float()
                     labels.append(ids[0])
+                    ## compute the anomaly score
                     score, x_hat = model.anomaly_score(batch_images, alpha=float(alpha/10))
+                    
+                    ## higher score than the threshold means anomaly
                     if score.item() > thresholds[alpha]:
                         test_scores.append(0)
 
@@ -113,4 +107,4 @@ if __name__ == "__main__":
 
                 precision = precision_score(labels, test_scores)
                 recall = recall_score(labels, test_scores)
-                print(precision, recall)
+                print('precision=', precision, '; recall=', recall)
